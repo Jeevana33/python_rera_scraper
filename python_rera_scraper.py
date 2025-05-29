@@ -1,87 +1,67 @@
-import time
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
-from bs4 import BeautifulSoup
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import pandas as pd
+import time
 
-def get_project_details(driver, url):
-    driver.get(url)
-    time.sleep(2)
 
-    soup = BeautifulSoup(driver.page_source, 'html.parser')
+options = Options()
+options.add_argument("--headless")  
+options.add_argument("--disable-gpu")
 
+driver_path = "C:\Users\MY PC\Downloads\chromedriver-win64\chromedriver-win64"
+service = Service(driver_path)
+driver = webdriver.Chrome(service=service, options=options)
+
+driver.get("https://rera.odisha.gov.in/projects/project-list")
+wait = WebDriverWait(driver, 20)
+wait.until(EC.presence_of_element_located((By.LINK_TEXT, "View Details")))
+
+
+links = driver.find_elements(By.LINK_TEXT, "View Details")
+project_links = [link.get_attribute("href") for link in links[:6]]
+
+project_data = []
+
+for link in project_links:
+    driver.get(link)
+    wait.until(EC.presence_of_element_located((By.CLASS_NAME, "project-details")))
+
+    def get_text(xpath):
+        try:
+            return driver.find_element(By.XPATH, xpath).text.strip()
+        except:
+            return ""
+
+    rera_no = get_text("//td[contains(text(), 'RERA Regd. No')]/following-sibling::td")
+    project_name = get_text("//td[contains(text(), 'Project Name')]/following-sibling::td")
     try:
-      
-        rera_no = soup.find("span", id="ctl00_ContentPlaceHolder1_lblReraNo").text.strip()
-        project_name = soup.find("span", id="ctl00_ContentPlaceHolder1_lblProjectName").text.strip()
+        driver.find_element(By.LINK_TEXT, "Promoter Details").click()
+        time.sleep(2)  # Wait for tab to load
+    except:
+        pass
 
-        # Navigate to Promoter Details tab
-        promoter_tab = driver.find_element(By.LINK_TEXT, "Promoter Details")
-        promoter_tab.click()
-        time.sleep(2)
+    promoter_name = get_text("//td[contains(text(), 'Company Name')]/following-sibling::td")
+    promoter_address = get_text("//td[contains(text(), 'Registered Office Address')]/following-sibling::td")
+    gst_no = get_text("//td[contains(text(), 'GST No')]/following-sibling::td")
 
-        soup = BeautifulSoup(driver.page_source, 'html.parser')
+    project_data.append({
+        "RERA Regd. No": rera_no,
+        "Project Name": project_name,
+        "Promoter Name": promoter_name,
+        "Promoter Address": promoter_address,
+        "GST No": gst_no
+    })
 
-    
-        promoter_name = soup.find("span", id="ctl00_ContentPlaceHolder1_lblPromoterName").text.strip()
-        promoter_address = soup.find("span", id="ctl00_ContentPlaceHolder1_lblRegisteredOfficeAdd").text.strip()
-        gst_no = soup.find("span", id="ctl00_ContentPlaceHolder1_lblGSTIN").text.strip()
+driver.quit()
 
-        return {
-            "RERA Regd. No": rera_no,
-            "Project Name": project_name,
-            "Promoter Name": promoter_name,
-            "Promoter Address": promoter_address,
-            "GST No": gst_no
-        }
+# Save data to CSV
+df = pd.DataFrame(project_data)
+df.to_csv("odisha_rera_projects.csv", index=False)
+print("Data saved to odisha_rera_projects.csv")
 
-    except Exception as e:
-        print(f"Error scraping {url}:\n{e}")
-        return None
 
-def main():
-    print("Launching Chrome WebDriver...")
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
 
-    print("Opening RERA Odisha project list page...")
-    driver.get("https://rera.odisha.gov.in/projects/project-list")
-    time.sleep(3)
-
-    print("Switching to 'Projects Registered' tab...")
-    try:
-        tab = driver.find_element(By.XPATH, "//a[text()='Projects Registered']")
-        tab.click()
-        time.sleep(3)
-    except Exception as e:
-        print("Could not switch to Projects Registered tab:", e)
-        driver.quit()
-        return
-
-    print("Collecting project detail links...")
-    view_links = driver.find_elements(By.LINK_TEXT, "View Details")[:6]
-    project_urls = [link.get_attribute("href") for link in view_links]
-
-    results = []
-
-    print("\nScraping project details...\n")
-    for i, url in enumerate(project_urls, start=1):
-        print(f"Scraping Project {i}...")
-        data = get_project_details(driver, url)
-        if data:
-            results.append(data)
-        else:
-            print(f"Failed to retrieve details for Project {i}.\n")
-        print("-" * 40)
-
-    driver.quit()
-
-    print("\n--- Scraped Project Details ---\n")
-    for i, project in enumerate(results, 1):
-        print(f"Project {i}")
-        for key, value in project.items():
-            print(f"{key}: {value}")
-        print("-" * 40)
-
-if __name__ == "__main__":
-    main()
