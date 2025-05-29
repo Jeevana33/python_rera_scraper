@@ -6,7 +6,6 @@ from bs4 import BeautifulSoup
 from webdriver_manager.chrome import ChromeDriverManager
 
 def get_project_details(driver, url):
-    """Extracts project and promoter details from a project's detail page."""
     driver.get(url)
     time.sleep(2)
 
@@ -42,7 +41,6 @@ def get_project_details(driver, url):
         return None
 
 def main():
-    """Main function to launch the browser, navigate the site, and scrape data."""
     print("Launching Chrome WebDriver...")
     driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
 
